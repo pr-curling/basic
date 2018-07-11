@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 from model import ResNet, ResidualBlock, load_model, save_model
 from collections import deque
 import random
@@ -20,34 +21,62 @@ def MCTS(model, state):
 #     print(rows, cols, turn)
 
 def best_shot_parm(prob):
-    index = prob
+    index = torch.argmax(prob)
 
-    if prob - 1024 <= 0:
+    if index - 1024 < 0:
         turn = 0
     else:
         turn = 1
 
-    rows = 0
-    tmp = index
-    while True:
+    if turn == 1:
+        rows = 0
+        tmp = index-1024
+        rows = tmp.item() // 32
+        cols = (index-1024) - rows * 32
 
-        tmp = tmp - 32
+    else:
+        rows = 0
+        tmp = index
+        rows = tmp.item() // 32
+        print(rows)
+        cols = index - rows * 32
 
-        if tmp < 0:
-            break
-        else:
-            rows += 1
-
-    cols = index - rows * 32
-
-    x = 4.75 / 32 * cols
-    y = 11.28 / 32 * rows
+    x = 4.75 / 31 * cols.item()
+    y = 11.28 / 31 * rows
     return [x, y, turn]
 
+def get_score(state, turn):
+
+    score = 0
+
+    t_coor = np.array([2.375, 4.88])
+    coors = [np.array([state[i], state[i+1]]) for i in range(0, 32, 2)]
+    dists = [np.linalg.norm(t_coor-coor) for coor in coors]
+    print(dists)
+
+    my = sorted(dists[turn::2])
+    op = sorted(dists[1-turn::2])
+
+    if my[0] < op[0]:
+        for my_dist in my:
+            if my_dist < op[0] and my_dist < 1.97:
+                score += 1
+            else:
+                break
+    else:
+        for op_dist in op:
+            if op_dist < my[0] and op_dist < 1.97:
+                score -= 1
+            else:
+                break
+
+    return score
 
 def coordinates_to_plane(coordinates):
     # x: 0.14 4.61
     # y: 11.135 2.906
+    if len(coordinates.shape) == 1:
+        coordinates = [coordinates]
     number_of_coor = len(coordinates)
     coors = []
     for coordinate in coordinates:
@@ -91,7 +120,7 @@ if __name__ == "__main__":
     learning_rate = 0.001
     gen = 1
     uncertatinty = 0.145
-    batch_size = 32
+    batch_size = 1
     epoch = 1
 
     model = ResNet(ResidualBlock, [2, 2, 2, 2]).to(device)
@@ -101,6 +130,7 @@ if __name__ == "__main__":
         load_model(model, model_file_name)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.0001)
+    criterion = nn.CrossEntropyLoss()
 
 
     #----------------------TRAIN--------------------------
@@ -113,34 +143,49 @@ if __name__ == "__main__":
 
         for _ in range(num_of_game):
             for turn in range(16):
-                state_plane = state.numpy()
+                state_plane = state
                 print(state_plane)
                 state_plane = coordinates_to_plane(state_plane).to(device)
                 print(state_plane.shape)
                 prob, _ = model(state_plane)
                 print(prob[0].shape)
                 action = best_shot_parm(prob)
-                state = sim.simulate(state, turn, action[0], action[1], action[3], uncertatinty)
+                state = sim.simulate(state, turn, action[0], action[1], action[2], uncertatinty)[0]
                 mem.append([state, turn, prob, 0])
 
-            score = get_score(state)
+            score = get_score(state, 0)
             for m in mem[-16:]:
                 m[3] = score
 
-        for e in range(epoch):
+        for e in range(1):
 
             for i in range(int(len(mem)/batch_size)):
-                samples = np.asarray(random.sample(mem, batch_size))
+                #samples = np.asarray(random.sample(mem, batch_size))
 
-                states = np.vstack(samples[:, 0])
-                turns = np.vstack(samples[:, 1])
-                probs = np.vstack(samples[:, 2])
-                scores = torch.tensor(samples[:, 3]).to(device)
+                # states = np.vstack(samples[:, 0])
+                # turns = np.vstack(samples[:, 1])
+                # probs = torch.tensor(np.vstack(samples[:, 2])).to(device)
+                # scores = torch.tensor(samples[:, 3]).to(device)
 
+                samples = random.sample(mem, 1)[0]
+
+                states = samples[0]
+                turns = samples[1]
+                probs = torch.empty(1, dtype=torch.long).to(device)
+                probs[0] = torch.argmax(probs)
+                scores = torch.empty(1, dtype=torch.long).to(device)
+                scores[0] = samples[3]+8
+
+                state_plane = coordinates_to_plane(states).to(device)
+                state_plane.requires_grad_()
                 p_out, v_out = model(state_plane)
 
-                one = torch.sum(- scores * torch.log(v_out)) / batch_size
-                two = torch.sum(- probs * torch.log(p_out)) / batch_size
+                # one = torch.sum(- scores * torch.log(v_out))
+                # two = torch.sum(- probs * torch.log(p_out))
+
+                print(p_out.shape, probs.shape)
+                one = criterion(v_out, scores)
+                two = criterion(p_out, probs)
 
                 loss = one + two
 
