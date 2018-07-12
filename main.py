@@ -22,6 +22,7 @@ def MCTS(model, state):
 
 def best_shot_parm(prob):
     index = torch.argmax(prob)
+    print("max", index)
 
     if index - 1024 < 0:
         turn = 0
@@ -86,7 +87,7 @@ def coordinates_to_plane(coordinates):
             else:
                 coors[-1].append([int(round((x-0.14)/4.47 * 31)), int(round((y-2.906)/8.229 * 31))])
 
-    plane = torch.zeros((number_of_coor, 2, 32, 32))
+    plane = torch.zeros((number_of_coor, 2, 32, 32),requires_grad=True)
     for bat, coor in enumerate(coors):
         for i, c in enumerate(coor):
             if c is None:
@@ -163,7 +164,7 @@ if __name__ == "__main__":
         prob = torch.zeros((1,2048))
         state = np.asarray([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,0., 0.,
                 0., 0., 0., 0., 0., 0., 0., 0.,0., 0., 0., 0., 0., 0., 0., 0.])
-        prob[0][432] = 1
+        prob[0][100] = 1
         mem = [[state, 0, prob.to(device), 1]]
         print(len(mem))
         for e in range(10):
@@ -182,7 +183,7 @@ if __name__ == "__main__":
                 states = samples[0]
                 turns = samples[1]
                 probs = torch.empty(1, dtype=torch.long).to(device)
-                probs[0] = torch.argmax(probs)
+                probs[0] = torch.argmax(samples[2])
                 scores = torch.empty(1, dtype=torch.long).to(device)
                 scores[0] = samples[3]+8
 
@@ -190,9 +191,12 @@ if __name__ == "__main__":
                 state_plane.requires_grad_()
                 p_out, v_out = model(state_plane)
 
+                # print(probs.item())
+
                 # one = torch.sum(- scores * torch.log(v_out))
                 # two = torch.sum(- probs * torch.log(p_out))
-
+                if i %100 == 0:
+                    print("train max", torch.argmax(prob[0]))
                 one = criterion(v_out, scores)
                 two = criterion(p_out, probs)
 
@@ -202,15 +206,17 @@ if __name__ == "__main__":
                 loss.backward()
                 optimizer.step()
 
+
                 if i % 100 == 0:
                     print(state)
                     state_plane = state
                     state_plane = coordinates_to_plane(state_plane).to(device)
                     prob, v = model(state_plane)
-                    print("ho",prob[0][430:435], v[0][9])
-                    a = prob.detach().cpu().numpy()
+                    print("ho",prob[0][100], max(prob[0]), v[0][9])
+                    a = prob.detach().cpu().numpy()[0][:1024]
+                    a= np.reshape(a, (1,32,32))
                     print(best_shot_parm(prob))
-                    print("loss " +str(e) + " " + str(i), one, two, loss)
+                    print("loss " +str(e) + " " + str(i), one, two)
                 if i % 500 == 1:
                     save_model(model, "zero"+str(i))
 

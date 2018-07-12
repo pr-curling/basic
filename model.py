@@ -41,7 +41,7 @@ class ResNet(nn.Module):
     def __init__(self, block, layers, num_classes=10):
         super(ResNet, self).__init__()
         self.in_channels = 16
-        self.conv = conv3x3(2, 16) # my stone, enemy's stone, 1
+        self.conv = conv3x3(3, 16) # my stone, enemy's stone, 1
         self.bn = nn.BatchNorm2d(16)
         self.relu = nn.ReLU(inplace=True)
         self.layer1 = self.make_layer(block, 16, layers[0])
@@ -70,7 +70,10 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        out = self.conv(x)
+
+        a = torch.ones((1,1,32,32)).to(device)
+        input_x = torch.cat((x, a), 1).to(device)
+        out = self.conv(input_x)
         out = self.bn(out)
         out = self.relu(out)
         out = self.layer1(out)
