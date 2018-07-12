@@ -38,7 +38,6 @@ def best_shot_parm(prob):
         rows = 0
         tmp = index
         rows = tmp.item() // 32
-        print(rows)
         cols = index - rows * 32
 
     x = 4.75 / 31 * cols.item()
@@ -117,8 +116,8 @@ class ReplayBuffer(object):
 if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    learning_rate = 0.001
-    gen = 1
+    learning_rate = 0.0001
+    gen = 3
     uncertatinty = 0.145
     batch_size = 1
     epoch = 1
@@ -135,31 +134,42 @@ if __name__ == "__main__":
 
     #----------------------TRAIN--------------------------
 
-    num_of_game = 1
-
+    num_of_game = 0
+    epsilon = 0.99
     for i in range(gen):
         mem = [] # state turn prob reward
-        state = torch.zeros((1, 32))
 
         for _ in range(num_of_game):
+
+            state = torch.zeros((1, 32))
             for turn in range(16):
                 state_plane = state
-                print(state_plane)
                 state_plane = coordinates_to_plane(state_plane).to(device)
-                print(state_plane.shape)
                 prob, _ = model(state_plane)
-                print(prob[0].shape)
-                action = best_shot_parm(prob)
+                if epsilon > random.random():
+                    action = (random.random()*4.75, random.random()*11.28, random.randint(0,1))
+                else:
+                    action = best_shot_parm(prob)
+
+                print("state, action ", state, action)
                 state = sim.simulate(state, turn, action[0], action[1], action[2], uncertatinty)[0]
                 mem.append([state, turn, prob, 0])
-
+            prob_np = prob.detach().cpu().numpy()
             score = get_score(state, 0)
             for m in mem[-16:]:
                 m[3] = score
 
-        for e in range(1):
-
-            for i in range(int(len(mem)/batch_size)):
+            epsilon *= 0.98
+        prob = torch.zeros((1,2048))
+        state = np.asarray([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,0., 0.,
+                0., 0., 0., 0., 0., 0., 0., 0.,0., 0., 0., 0., 0., 0., 0., 0.])
+        prob[0][432] = 1
+        mem = [[state, 0, prob.to(device), 1]]
+        print(len(mem))
+        for e in range(10):
+            last_loss = 0
+            #for i in range(int(len(mem)/batch_size)):
+            for i in range(400):
                 #samples = np.asarray(random.sample(mem, batch_size))
 
                 # states = np.vstack(samples[:, 0])
@@ -183,7 +193,6 @@ if __name__ == "__main__":
                 # one = torch.sum(- scores * torch.log(v_out))
                 # two = torch.sum(- probs * torch.log(p_out))
 
-                print(p_out.shape, probs.shape)
                 one = criterion(v_out, scores)
                 two = criterion(p_out, probs)
 
@@ -194,6 +203,15 @@ if __name__ == "__main__":
                 optimizer.step()
 
                 if i % 100 == 0:
-                    print("loss", loss)
+                    print(state)
+                    state_plane = state
+                    state_plane = coordinates_to_plane(state_plane).to(device)
+                    prob, v = model(state_plane)
+                    print("ho",prob[0][430:435], v[0][9])
+                    a = prob.detach().cpu().numpy()
+                    print(best_shot_parm(prob))
+                    print("loss " +str(e) + " " + str(i), one, two, loss)
                 if i % 500 == 1:
                     save_model(model, "zero"+str(i))
+
+        save_model(model, "zero_final")
