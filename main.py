@@ -52,7 +52,6 @@ def get_score(state, turn):
     t_coor = np.array([2.375, 4.88])
     coors = [np.array([state[i], state[i+1]]) for i in range(0, 32, 2)]
     dists = [np.linalg.norm(t_coor-coor) for coor in coors]
-    print(dists)
 
     my = sorted(dists[turn::2])
     op = sorted(dists[1-turn::2])
@@ -87,7 +86,7 @@ def coordinates_to_plane(coordinates):
             else:
                 coors[-1].append([int(round((x-0.14)/4.47 * 31)), int(round((y-2.906)/8.229 * 31))])
 
-    plane = torch.zeros((number_of_coor, 2, 32, 32),requires_grad=True)
+    plane = torch.zeros((number_of_coor, 2, 32, 32))
     for bat, coor in enumerate(coors):
         for i, c in enumerate(coor):
             if c is None:
@@ -121,7 +120,7 @@ if __name__ == "__main__":
     gen = 3
     uncertatinty = 0.145
     batch_size = 1
-    epoch = 1
+    epoch = 3
 
     model = ResNet(ResidualBlock, [2, 2, 2, 2]).to(device)
 
@@ -135,7 +134,7 @@ if __name__ == "__main__":
 
     #----------------------TRAIN--------------------------
 
-    num_of_game = 0
+    num_of_game = 20
     epsilon = 0.99
     for i in range(gen):
         mem = [] # state turn prob reward
@@ -152,7 +151,7 @@ if __name__ == "__main__":
                 else:
                     action = best_shot_parm(prob)
 
-                print("state, action ", state, action)
+                # print("state, action ", state, action)
                 state = sim.simulate(state, turn, action[0], action[1], action[2], uncertatinty)[0]
                 mem.append([state, turn, prob, 0])
             prob_np = prob.detach().cpu().numpy()
@@ -161,13 +160,9 @@ if __name__ == "__main__":
                 m[3] = score
 
             epsilon *= 0.98
-        prob = torch.zeros((1,2048))
-        state = np.asarray([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,0., 0.,
-                0., 0., 0., 0., 0., 0., 0., 0.,0., 0., 0., 0., 0., 0., 0., 0.])
-        prob[0][100] = 1
-        mem = [[state, 0, prob.to(device), 1]]
-        print(len(mem))
-        for e in range(10):
+        print("mem", len(mem))
+
+        for e in range(epoch):
             last_loss = 0
             #for i in range(int(len(mem)/batch_size)):
             for i in range(400):
@@ -195,8 +190,7 @@ if __name__ == "__main__":
 
                 # one = torch.sum(- scores * torch.log(v_out))
                 # two = torch.sum(- probs * torch.log(p_out))
-                if i %100 == 0:
-                    print("train max", torch.argmax(prob[0]))
+
                 one = criterion(v_out, scores)
                 two = criterion(p_out, probs)
 
@@ -208,15 +202,15 @@ if __name__ == "__main__":
 
 
                 if i % 100 == 0:
-                    print(state)
-                    state_plane = state
-                    state_plane = coordinates_to_plane(state_plane).to(device)
-                    prob, v = model(state_plane)
-                    print("ho",prob[0][100], max(prob[0]), v[0][9])
-                    a = prob.detach().cpu().numpy()[0][:1024]
-                    a= np.reshape(a, (1,32,32))
-                    print(best_shot_parm(prob))
-                    print("loss " +str(e) + " " + str(i), one, two)
+                    # print(state)
+                    # state_plane = state
+                    # state_plane = coordinates_to_plane(state_plane).to(device)
+                    # prob, v = model(state_plane)
+                    # print("ho", max(prob[0]), v[0])
+                    # a = prob.detach().cpu().numpy()[0][:1024]
+                    # a= np.reshape(a, (1,32,32))
+                    # print(best_shot_parm(prob))
+                    print("loss " +str(e) + " " + str(i), one.item(), two.item(), loss.item())
                 if i % 500 == 1:
                     save_model(model, "zero"+str(i))
 
