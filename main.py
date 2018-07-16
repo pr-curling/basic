@@ -147,7 +147,7 @@ if __name__ == "__main__":
 
     #----------------------TRAIN--------------------------
 
-    num_of_game = 1000
+    num_of_game = 100
     epsilon = 0.99
 
     for i in range(gen):
@@ -157,19 +157,19 @@ if __name__ == "__main__":
         for _ in range(num_of_game):
 
             state = np.zeros((1, 32))
-            for turn in range(1):
+            for turn in range(2):
 
                 state_plane = coordinates_to_plane(state).to(device)
                 v = None
                 with torch.no_grad():
                     prob, v = model(state_plane)
-                if epsilon > random.random():
+                if epsilon > random.random() or i == 0 or turn % 2 == 1:
                     action = (random.random()*4.75, random.random()*11.28, random.randint(0,1))
                     prob = shot_to_onehot_prob(action)
                 else:
                     action = best_shot_parm(prob)
                     prob = shot_to_onehot_prob(action)
-                print(action, v)
+                print(action)
 
                 # print("state, action ", state, action)
                 next_state = sim.simulate(state, turn, action[0], action[1], action[2], uncertatinty)[0]
@@ -179,10 +179,10 @@ if __name__ == "__main__":
                 state = next_state
             # prob_np = prob.detach().cpu().numpy()
             score = get_score(state, 0)
+            print(score)
             if score > 0:
                 for m in mem[-1:]: # should be changed to -8
                     m[3] = score
-
             else:
                 del(mem[-1:])
 
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         for e in range(epoch):
             last_loss = 0
             #for i in range(int(len(mem)/batch_size)):
-            for i in range(100):
+            for i in range(int(len(mem)/batch_size)):
                 #samples = np.asarray(random.sample(mem, batch_size))
 
                 # states = np.vstack(samples[:, 0])
@@ -248,7 +248,7 @@ if __name__ == "__main__":
                     # a= np.reshape(a, (1,32,32))
                     # print(best_shot_parm(prob))
                     print("loss " +str(e) + " " + str(i), one.item(), two.item(), loss.item())
-                if i % 500 == 1:
-                    save_model(model, "zero"+str(i))
+                #if i % 500 == 1:
+                #    save_model(model, "zero"+str(i))
 
-        # save_model(model, "zero_final")
+        save_model(model, "zero_final")
