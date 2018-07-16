@@ -20,9 +20,19 @@ def MCTS(model, state):
 #
 #     print(rows, cols, turn)
 
+def shot_to_onehot_prob(shot):
+    prob = torch.zeros((1, 2048))
+
+    x, y, curl = shot
+
+    idx = round(y/11.28*31) *32 + round(x/4.75 *31) + curl*1024
+    prob[0][idx] = 1
+
+    return prob
+
 def best_shot_parm(prob):
     index = torch.argmax(prob)
-    print("max", index)
+    # print("max", index)
 
     if index - 1024 < 0:
         turn = 0
@@ -87,6 +97,9 @@ def coordinates_to_plane(coordinates):
                 coors[-1].append([int(round((x-0.14)/4.47 * 31)), int(round((y-2.906)/8.229 * 31))])
 
     plane = torch.zeros((number_of_coor, 2, 32, 32))
+    ones_plane = torch.ones((number_of_coor,1,32,32))
+    plane = torch.cat((plane, ones_plane), 1)
+
     for bat, coor in enumerate(coors):
         for i, c in enumerate(coor):
             if c is None:
@@ -117,10 +130,10 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     learning_rate = 0.0001
-    gen = 3
+    gen = 5
     uncertatinty = 0.145
     batch_size = 1
-    epoch = 3
+    epoch = 2
 
     model = ResNet(ResidualBlock, [2, 2, 2, 2]).to(device)
 
@@ -134,38 +147,64 @@ if __name__ == "__main__":
 
     #----------------------TRAIN--------------------------
 
-    num_of_game = 20
-    epsilon = 0.99
+    num_of_game = 1000
+    epsilon = 0.03
+    mem = []
     for i in range(gen):
-        mem = [] # state turn prob reward
+       # mem = [] # state turn prob reward
 
         for _ in range(num_of_game):
+            if len(mem) >= 1:
+                break
+            state = np.zeros((1, 32))
+            for turn in range(1):
 
-            state = torch.zeros((1, 32))
-            for turn in range(16):
-                state_plane = state
-                state_plane = coordinates_to_plane(state_plane).to(device)
-                prob, _ = model(state_plane)
+                state_plane = coordinates_to_plane(state).to(device)
+                v = None
+                with torch.no_grad():
+                    prob, v = model(state_plane)
                 if epsilon > random.random():
                     action = (random.random()*4.75, random.random()*11.28, random.randint(0,1))
+                    prob = shot_to_onehot_prob(action)
                 else:
                     action = best_shot_parm(prob)
+                    prob = shot_to_onehot_prob(action)
+                print(action, v)
 
                 # print("state, action ", state, action)
-                state = sim.simulate(state, turn, action[0], action[1], action[2], uncertatinty)[0]
-                mem.append([state, turn, prob, 0])
-            prob_np = prob.detach().cpu().numpy()
+                next_state = sim.simulate(state, turn, action[0], action[1], action[2], uncertatinty)[0]
+                #print(state)
+                if turn % 2 == 0:
+                    mem.append([state, turn, prob, 0])
+                state = next_state
+            # prob_np = prob.detach().cpu().numpy()
             score = get_score(state, 0)
-            for m in mem[-16:]:
-                m[3] = score
+            if score > 0:
+                for m in mem[-1:]:
+                    m[3] = score
+                break # ------------shoud be removed
+            else:
+                del(mem[-1:])
 
-            epsilon *= 0.98
+            epsilon *= 0.999
         print("mem", len(mem))
+        for x in mem:
+            print(x[0])
+        if True:
+            state = np.zeros((1, 32))
+            state_plane = coordinates_to_plane(state).to(device)
+            prob, v = model(state_plane)
+            action = best_shot_parm(prob)
+            prob = shot_to_onehot_prob(action)
+            print(action, v)
+            #prob = torch.zeros((1,2048))
+            #prob[0][400] = 1
+            #mem = [[state, 0, prob, 1]]
 
         for e in range(epoch):
             last_loss = 0
             #for i in range(int(len(mem)/batch_size)):
-            for i in range(400):
+            for i in range(100):
                 #samples = np.asarray(random.sample(mem, batch_size))
 
                 # states = np.vstack(samples[:, 0])
@@ -173,24 +212,22 @@ if __name__ == "__main__":
                 # probs = torch.tensor(np.vstack(samples[:, 2])).to(device)
                 # scores = torch.tensor(samples[:, 3]).to(device)
 
-                samples = random.sample(mem, 1)[0]
+                samples = random.sample(mem, batch_size)
+                states = np.asarray([x[0] for x in samples])
+                turns = [x[1] for x in samples]
+                # probs = torch.empty(batch_size, dtype=torch.long).to(device)
+                probs = torch.argmax(torch.stack([x[2] for x in samples]), 2).view(-1).to(device)
 
-                states = samples[0]
-                turns = samples[1]
-                probs = torch.empty(1, dtype=torch.long).to(device)
-                probs[0] = torch.argmax(samples[2])
-                scores = torch.empty(1, dtype=torch.long).to(device)
-                scores[0] = samples[3]+8
+                # scores = torch.empty(batch_size, dtype=torch.long).to(device)
+                scores = torch.LongTensor([x[3]+8 for x in samples]).to(device)
 
                 state_plane = coordinates_to_plane(states).to(device)
                 state_plane.requires_grad_()
+                # scores.requires_grad_()
                 p_out, v_out = model(state_plane)
-
                 # print(probs.item())
-
                 # one = torch.sum(- scores * torch.log(v_out))
                 # two = torch.sum(- probs * torch.log(p_out))
-
                 one = criterion(v_out, scores)
                 two = criterion(p_out, probs)
 
@@ -214,4 +251,4 @@ if __name__ == "__main__":
                 if i % 500 == 1:
                     save_model(model, "zero"+str(i))
 
-        save_model(model, "zero_final")
+        # save_model(model, "zero_final")

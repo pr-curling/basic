@@ -70,10 +70,7 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-
-        a = torch.ones((1,1,32,32)).to(device)
-        input_x = torch.cat((x, a), 1).to(device)
-        out = self.conv(input_x)
+        out = self.conv(x)
         out = self.bn(out)
         out = self.relu(out)
         out = self.layer1(out)
