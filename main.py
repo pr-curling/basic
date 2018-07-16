@@ -133,7 +133,7 @@ if __name__ == "__main__":
     gen = 5
     uncertatinty = 0.145
     batch_size = 1
-    epoch = 2
+    epoch = 10
 
     model = ResNet(ResidualBlock, [2, 2, 2, 2]).to(device)
 
@@ -148,14 +148,14 @@ if __name__ == "__main__":
     #----------------------TRAIN--------------------------
 
     num_of_game = 1000
-    epsilon = 0.03
-    mem = []
+    epsilon = 0.99
+
     for i in range(gen):
-       # mem = [] # state turn prob reward
+        # state turn prob reward
+        mem = []
 
         for _ in range(num_of_game):
-            if len(mem) >= 1:
-                break
+
             state = np.zeros((1, 32))
             for turn in range(1):
 
@@ -180,17 +180,17 @@ if __name__ == "__main__":
             # prob_np = prob.detach().cpu().numpy()
             score = get_score(state, 0)
             if score > 0:
-                for m in mem[-1:]:
+                for m in mem[-1:]: # should be changed to -8
                     m[3] = score
-                break # ------------shoud be removed
+
             else:
                 del(mem[-1:])
 
             epsilon *= 0.999
         print("mem", len(mem))
-        for x in mem:
-            print(x[0])
-        if True:
+        for x in mem[:10]:
+            print(x[2])
+        if False:
             state = np.zeros((1, 32))
             state_plane = coordinates_to_plane(state).to(device)
             prob, v = model(state_plane)
