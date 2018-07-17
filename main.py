@@ -129,7 +129,7 @@ class ReplayBuffer(object):
 if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    learning_rate = 0.0001
+    learning_rate = 0.00001
     gen = 5
     uncertatinty = 0.145
     batch_size = 1
@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
     model = ResNet(ResidualBlock, [2, 2, 2, 2]).to(device)
 
-    model_file_name = None
+    model_file_name = "zero_final0_10000_t0"
     if model_file_name is not None:
         load_model(model, model_file_name)
 
@@ -147,23 +147,23 @@ if __name__ == "__main__":
 
     #----------------------TRAIN--------------------------
 
-    num_of_game = 100
-    epsilon = 0.99
-
-    for i in range(gen):
+    num_of_game = 500
+    epsilon = 0.1
+    num_of_turn =2
+    for i_gen in range(gen):
         # state turn prob reward
         mem = []
 
         for _ in range(num_of_game):
 
             state = np.zeros((1, 32))
-            for turn in range(2):
+            for turn in range(num_of_turn):
 
                 state_plane = coordinates_to_plane(state).to(device)
                 v = None
                 with torch.no_grad():
                     prob, v = model(state_plane)
-                if epsilon > random.random() or i == 0 or turn % 2 == 1:
+                if epsilon > random.random() or i_gen == 0 or turn % 2 == 1:
                     action = (random.random()*4.75, random.random()*11.28, random.randint(0,1))
                     prob = shot_to_onehot_prob(action)
                 else:
@@ -181,12 +181,12 @@ if __name__ == "__main__":
             score = get_score(state, 0)
             print(score)
             if score > 0:
-                for m in mem[-1:]: # should be changed to -8
+                for m in mem[-int(num_of_turn/2):]: # should be changed to -8
                     m[3] = score
             else:
-                del(mem[-1:])
+                del(mem[-int(num_of_turn/2):])
 
-            epsilon *= 0.999
+            #epsilon *= 0.999
         print("mem", len(mem))
         for x in mem[:10]:
             print(x[2])
@@ -251,4 +251,4 @@ if __name__ == "__main__":
                 #if i % 500 == 1:
                 #    save_model(model, "zero"+str(i))
 
-        save_model(model, "zero_final")
+        save_model(model, "zero_final_" + str(i_gen))
