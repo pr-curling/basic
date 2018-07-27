@@ -1,5 +1,8 @@
 import torch
 import numpy as np
+from tqdm import trange
+import random
+from Simulator import Simulator as sim
 
 
 # def best_shot_parm(prob):
@@ -72,6 +75,11 @@ def get_score(state, turn):
 
     return score
 
+
+def clip(x):
+    return max(0, min(31, round(x)))
+
+
 def coordinates_to_plane(coordinates, order=0):
     # x: 0.14 4.61
     # y: 11.135 2.906
@@ -98,14 +106,43 @@ def coordinates_to_plane(coordinates, order=0):
         for i, c in enumerate(coor):
             if c is None:
                 continue
-            x, y = c
-            if x > 31:
-                x = 31
-            if y > 31:
-                y = 31
+
+            x, y = [clip(cc) for cc in c]
+
             if i % 2 == order:
                 plane[bat][0][y][x] = 1
             else:
                 plane[bat][1][y][x] = 1
 
     return plane
+
+def lose_to_win_action(lose_mem, win_mem_size, num_of_turn=16, order=0):
+    uncertatinty = 0
+    mem = []
+    for start_idx in trange(0, len(lose_mem), 8):
+
+        actions = [best_shot_parm(x[2]) for x in lose_mem[start_idx:start_idx+8]]
+        while True:
+            state = np.zeros((1, 32))
+            mem_tmp = []
+            for turn in range(num_of_turn):
+                if turn % 2 == order:
+                    action = (random.random() * 4.75, random.random() * 11.28, random.randint(0, 1))
+                    prob = shot_to_onehot_prob(action)
+                    mem_tmp.append([state, turn, prob, 0])
+                else:
+                    action = actions[turn//2]
+                state = sim.simulate(state, turn, action[0], action[1], action[2], uncertatinty)[0]
+
+            score = get_score(state, order)
+            if score > 0:
+                for m in mem_tmp:
+                    m[3] = score
+                break
+
+        if win_mem_size <= len(mem):
+            break
+
+        mem.extend(mem_tmp)
+
+    return mem
