@@ -80,7 +80,7 @@ def clip(x):
     return max(0, min(31, round(x)))
 
 
-def coordinates_to_plane(coordinates, order=0):
+def coordinates_to_plane(coordinates, turns, order=0):
     # x: 0.14 4.61
     # y: 11.135 2.906
 
@@ -101,6 +101,17 @@ def coordinates_to_plane(coordinates, order=0):
     plane = torch.zeros((number_of_coor, 2, 32, 32))
     ones_plane = torch.ones((number_of_coor,1,32,32))
     plane = torch.cat((plane, ones_plane), 1)
+    zeros_plane = torch.ones((number_of_coor,1,32,32))
+
+    if order == 0:
+        plane = torch.cat((plane, ones_plane), 1)
+        plane = torch.cat((plane, zeros_plane), 1)
+    else:
+        plane = torch.cat((plane, zeros_plane), 1)
+        plane = torch.cat((plane, ones_plane), 1)
+
+    plane = torch.cat((plane, torch.zeros(number_of_coor, 8, 32, 32)), 1)
+
 
     for bat, coor in enumerate(coors):
         for i, c in enumerate(coor):
@@ -113,6 +124,11 @@ def coordinates_to_plane(coordinates, order=0):
                 plane[bat][0][y][x] = 1
             else:
                 plane[bat][1][y][x] = 1
+
+        if type(turns) is int:
+            plane[bat][5 + turns // 2] = torch.ones((32, 32))
+        else:
+            plane[bat][5 + turns[bat] // 2] = torch.ones((32, 32))
 
     return plane
 

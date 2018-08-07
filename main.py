@@ -16,14 +16,14 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     learning_rate = 0.00001
-    gen = 12
+    gen = 32
     uncertatinty = 0
     batch_size = 64
-    epoch = 32
+    epoch = 64
 
     model = ResNet(ResidualBlock, [2, 2, 2, 2]).to(device)
 
-    model_file_name = None
+    model_file_name = "zero_final_3_"
     if model_file_name is not None:
         load_model(model, model_file_name)
 
@@ -33,11 +33,11 @@ if __name__ == "__main__":
 
     #----------------------TRAIN--------------------------
 
-    num_of_game = 10000
+    num_of_game = 30000
     epsilon = 1
     num_of_turn = 16
     # order = 0
-    for i_gen in range(gen):
+    for i_gen in range(1, gen):
         print("\n----------{:03}----------".format(i_gen))
         order = i_gen % 2
         # (state, turn, prob, reward)
@@ -49,10 +49,12 @@ if __name__ == "__main__":
             state = np.zeros((1, 32))
             for turn in range(num_of_turn):
 
-                if turn % 2 == order or i_gen == 0:
+                if turn % 2 == order or i_gen == 0 or turn == 0:
                     action = (random.random()*4.75, random.random()*11.28, random.randint(0,1))
+                    if turn == 0:
+                        action = (random.random() * 4.75, random.random() * 8.28 + 3, random.randint(0, 1))
                 else:
-                    state_plane = coordinates_to_plane(state, turn % 2).to(device)
+                    state_plane = coordinates_to_plane(state, turn, turn % 2).to(device)
                     v = None
                     with torch.no_grad():
                         prob, v = model(state_plane)
@@ -104,7 +106,7 @@ if __name__ == "__main__":
 
                 scores = torch.LongTensor([x[3]+8 for x in samples]).to(device)
 
-                state_plane = coordinates_to_plane(states).to(device)
+                state_plane = coordinates_to_plane(states, turns, order).to(device)
                 state_plane.requires_grad_()
                 # scores.requires_grad_()
                 p_out, v_out = model(state_plane)

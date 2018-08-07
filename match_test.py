@@ -39,12 +39,12 @@ def match(args):
         state = np.zeros((1, 32))
         for turn in range(8):
             if turn % 2 == order:
-                state_plane = coordinates_to_plane(state, order).to(device)
+                state_plane = coordinates_to_plane(state, turn, order).to(device)
 
                 prob, _ = model(state_plane)
                 action = best_shot_parm(prob)
             elif opponent is not None:
-                state_plane = coordinates_to_plane(state, (order+1) % 2).to(device)
+                state_plane = coordinates_to_plane(state, turn, (order+1) % 2).to(device)
 
                 prob, _ = model2(state_plane)
                 action = best_shot_parm(prob)
